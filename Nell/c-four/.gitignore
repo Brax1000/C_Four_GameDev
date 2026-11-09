@@ -1,0 +1,6 @@
+test_game
+test_game.exe
+cfour.exe
+*_demo
+*_demo.exe
+*.o

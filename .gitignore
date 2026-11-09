@@ -1,0 +1,11 @@
+# Object files
+*.o
+*.obj
+
+# Temporary compiler output
+*.tmp
+*.log
+
+# VS Code user workspace state
+.vscode/.browse.VC.db*
+.vscode/*.log
