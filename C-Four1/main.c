@@ -122,6 +122,160 @@ static bool musicReady = false;
 static bool musicEnabled = true;
 static bool exitGame = false;
 
+/* -------------------------------------------------- */
+/* SOUND EFFECTS                                      */
+/* -------------------------------------------------- */
+
+typedef enum {
+    SFX_BOOT = 0,
+    SFX_KEYSTROKE,
+    SFX_NAV,
+    SFX_SELECT,
+    SFX_BACK,
+    SFX_KEYPAD_0,
+    SFX_KEYPAD_1,
+    SFX_KEYPAD_2,
+    SFX_KEYPAD_3,
+    SFX_KEYPAD_4,
+    SFX_KEYPAD_5,
+    SFX_KEYPAD_6,
+    SFX_KEYPAD_7,
+    SFX_KEYPAD_8,
+    SFX_KEYPAD_9,
+    SFX_DELETE,
+    SFX_CLEAR,
+    SFX_ERROR,
+    SFX_HIGHER,
+    SFX_LOWER,
+    SFX_TICK,
+    SFX_ALARM,
+    SFX_THEME,
+    SFX_PAUSE,
+    SFX_RESUME,
+    SFX_EXPLOSION,
+    SFX_WIN,
+    SFX_STAR,
+    SFX_COUNT
+} SfxId;
+
+static Sound sfxList[SFX_COUNT];
+static bool sfxLoaded[SFX_COUNT] = {false};
+static bool sfxEnabled = true;
+
+static void PlaySfx(SfxId id)
+{
+    if (sfxEnabled && id >= 0 && id < SFX_COUNT && sfxLoaded[id])
+    {
+        PlaySound(sfxList[id]);
+    }
+}
+
+static void InitGameAudio(void)
+{
+    InitAudioDevice();
+
+    if (IsAudioDeviceReady())
+    {
+        if (FileExists("assets/background.mp3"))
+        {
+            music = LoadMusicStream("assets/background.mp3");
+            if (music.stream.buffer != NULL)
+            {
+                music.looping = true;
+                SetMusicVolume(music, 0.22f);
+                PlayMusicStream(music);
+                musicReady = true;
+            }
+        }
+
+        const char *sfxFiles[SFX_COUNT] = {
+            "assets/sfx_boot.wav",
+            "assets/sfx_keystroke.wav",
+            "assets/sfx_nav.wav",
+            "assets/sfx_select.wav",
+            "assets/sfx_back.wav",
+            "assets/sfx_keypad_0.wav",
+            "assets/sfx_keypad_1.wav",
+            "assets/sfx_keypad_2.wav",
+            "assets/sfx_keypad_3.wav",
+            "assets/sfx_keypad_4.wav",
+            "assets/sfx_keypad_5.wav",
+            "assets/sfx_keypad_6.wav",
+            "assets/sfx_keypad_7.wav",
+            "assets/sfx_keypad_8.wav",
+            "assets/sfx_keypad_9.wav",
+            "assets/sfx_delete.wav",
+            "assets/sfx_clear.wav",
+            "assets/sfx_error.wav",
+            "assets/sfx_higher.wav",
+            "assets/sfx_lower.wav",
+            "assets/sfx_tick.wav",
+            "assets/sfx_alarm.wav",
+            "assets/sfx_theme.wav",
+            "assets/sfx_pause.wav",
+            "assets/sfx_resume.wav",
+            "assets/sfx_explosion.wav",
+            "assets/sfx_win.wav",
+            "assets/sfx_star.wav"
+        };
+
+        const float sfxVolumes[SFX_COUNT] = {
+            0.65f, /* BOOT */
+            0.45f, /* KEYSTROKE */
+            0.50f, /* NAV */
+            0.60f, /* SELECT */
+            0.50f, /* BACK */
+            0.55f, 0.55f, 0.55f, 0.55f, 0.55f, /* KEYPAD 0-4 */
+            0.55f, 0.55f, 0.55f, 0.55f, 0.55f, /* KEYPAD 5-9 */
+            0.50f, /* DELETE */
+            0.50f, /* CLEAR */
+            0.75f, /* ERROR */
+            0.80f, /* HIGHER */
+            0.80f, /* LOWER */
+            0.35f, /* TICK */
+            0.80f, /* ALARM */
+            0.60f, /* THEME */
+            0.55f, /* PAUSE */
+            0.55f, /* RESUME */
+            0.95f, /* EXPLOSION */
+            0.85f, /* WIN */
+            0.75f  /* STAR */
+        };
+
+        for (int i = 0; i < SFX_COUNT; i++)
+        {
+            if (FileExists(sfxFiles[i]))
+            {
+                sfxList[i] = LoadSound(sfxFiles[i]);
+                sfxLoaded[i] = true;
+                SetSoundVolume(sfxList[i], sfxVolumes[i]);
+            }
+        }
+    }
+}
+
+static void UnloadGameAudio(void)
+{
+    for (int i = 0; i < SFX_COUNT; i++)
+    {
+        if (sfxLoaded[i])
+        {
+            UnloadSound(sfxList[i]);
+            sfxLoaded[i] = false;
+        }
+    }
+
+    if (musicReady)
+    {
+        StopMusicStream(music);
+        UnloadMusicStream(music);
+        musicReady = false;
+    }
+
+    if (IsAudioDeviceReady())
+        CloseAudioDevice();
+}
+
 static Camera2D camera = {0};
 static Vector2 mouseWorld = {0};
 static bool uiLocked = false;
@@ -261,6 +415,7 @@ static int MenuList(Game *g, int c, int r, int w, int spacing,
     int result = -1;
     Vector2 d = GetMouseDelta();
     bool moved = (d.x != 0 || d.y != 0);
+    int prevSel = g->menuSel;
 
     if (!uiLocked)
     {
@@ -297,6 +452,16 @@ static int MenuList(Game *g, int c, int r, int w, int spacing,
             if (hv && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) result = i;
             if (sel && IsKeyPressed(KEY_ENTER)) result = i;
         }
+    }
+
+    if (!uiLocked && g->menuSel != prevSel)
+    {
+        PlaySfx(SFX_NAV);
+    }
+
+    if (result != -1)
+    {
+        PlaySfx(SFX_SELECT);
     }
 
     return result;
@@ -760,20 +925,32 @@ static void AddDigit(Game *g, int digit)
 {
     int maxDigits = g->maximum >= 100 ? 3 : 2;
 
-    if (g->inputLength >= maxDigits)
+    if (g->inputLength >= maxDigits || (g->inputLength == 0 && digit == 0))
+    {
+        PlaySfx(SFX_ERROR);
         return;
-
-    if (g->inputLength == 0 && digit == 0)
-        return;
+    }
 
     g->input[g->inputLength++] = (char)('0' + digit);
     g->input[g->inputLength] = '\0';
+
+    if (digit >= 0 && digit <= 9)
+        PlaySfx((SfxId)(SFX_KEYPAD_0 + digit));
+}
+
+static void ClearInputSilent(Game *g)
+{
+    g->inputLength = 0;
+    g->input[0] = '\0';
 }
 
 static void ClearInput(Game *g)
 {
-    g->inputLength = 0;
-    g->input[0] = '\0';
+    if (g->inputLength > 0)
+    {
+        ClearInputSilent(g);
+        PlaySfx(SFX_CLEAR);
+    }
 }
 
 static void EndMission(Game *g, bool won)
@@ -791,6 +968,7 @@ static void EndMission(Game *g, bool won)
 
         Say(g, "DEVICE DISARMED. Outstanding work, operative!", 1, 9999.0f);
         CodeRain(120);
+        PlaySfx(SFX_WIN);
     }
     else
     {
@@ -799,6 +977,7 @@ static void EndMission(Game *g, bool won)
 
         Say(g, "Signal lost... the device detonated. Reboot and try again.", 3, 9999.0f);
         Explosion(GAME_W / 2.0f, 380);
+        PlaySfx(SFX_EXPLOSION);
     }
 }
 
@@ -808,11 +987,12 @@ static void SubmitGuess(Game *g)
     {
         snprintf(g->message, sizeof(g->message), "PLEASE ENTER A NUMBER FIRST.");
         g->messageColor = K_ACC;
+        PlaySfx(SFX_ERROR);
         return;
     }
 
     int guess = atoi(g->input);
-    ClearInput(g);
+    ClearInputSilent(g);
 
     if (guess < g->minimum || guess > g->maximum)
     {
@@ -820,6 +1000,7 @@ static void SubmitGuess(Game *g)
                  "INVALID NUMBER. RANGE: %d TO %d.", g->minimum, g->maximum);
         g->messageColor = K_RED;
         shake = 5.0f;
+        PlaySfx(SFX_ERROR);
         return;
     }
 
@@ -829,6 +1010,8 @@ static void SubmitGuess(Game *g)
         {
             snprintf(g->message, sizeof(g->message), "YOU ALREADY TRIED THAT NUMBER.");
             g->messageColor = K_RED;
+            shake = 3.0f;
+            PlaySfx(SFX_ERROR);
             return;
         }
     }
@@ -852,11 +1035,13 @@ static void SubmitGuess(Game *g)
     {
         if (guess + 1 > g->low) g->low = guess + 1;
         snprintf(g->message, sizeof(g->message), "INCORRECT! THE SECRET CODE IS HIGHER.");
+        PlaySfx(SFX_HIGHER);
     }
     else
     {
         if (guess - 1 < g->high) g->high = guess - 1;
         snprintf(g->message, sizeof(g->message), "INCORRECT! THE SECRET CODE IS LOWER.");
+        PlaySfx(SFX_LOWER);
     }
 
     g->messageColor = K_RED;
@@ -875,6 +1060,7 @@ static void SubmitGuess(Game *g)
         snprintf(buf, sizeof(buf), "Warning: only %d %s left. Stay calm.",
                  g->attempts, g->attempts == 1 ? "try" : "tries");
         Say(g, buf, 2, 3.0f);
+        PlaySfx(SFX_ALARM);
     }
     else
     {
@@ -889,7 +1075,7 @@ static void ToggleMusic(void)
     musicEnabled = !musicEnabled;
 
     if (musicReady)
-        SetMusicVolume(music, musicEnabled ? 0.30f : 0.0f);
+        SetMusicVolume(music, musicEnabled ? 0.22f : 0.0f);
 }
 
 /* -------------------------------------------------- */
@@ -898,14 +1084,14 @@ static void ToggleMusic(void)
 
 static void DrawBoot(Game *g)
 {
-    const char *lines[10] = {
+    const char *lines[] = {
         "C-FOUR SYSTEMS (C) 2026",
         "BRAXTEN ORLINE URDELAS",
         "JOHN HAYDEN NELL",
         "DAVID PANSOY",
         "BONO ISAIAN TENDENCIA",
-        "BIOS v2.04  EXPLOSIVE ORDNANCE UNIT",
         "",
+        "BIOS v2.04  EXPLOSIVE ORDNANCE UNIT",
         "CHECKING MEMORY..............  640K OK",
         "DETECTING DISPLAY............  CRT-80x30 OK",
         "DETECTING AUDIO..............  ",
@@ -914,25 +1100,33 @@ static void DrawBoot(Game *g)
         "",
         "PRESS ANY KEY TO CONTINUE"
     };
+    int numLines = (int)(sizeof(lines) / sizeof(lines[0]));
 
     int budget = (int)(g->screenT * 75.0f);
 
-    for (int i = 0; i < 10 && budget > 0; i++)
+    for (int i = 0; i < numLines && budget > 0; i++)
     {
         char buf[96];
-        snprintf(buf, sizeof(buf), "%s%s", lines[i],
-                 i == 5 ? (musicReady ? "OK" : "NO MUSIC FILE") : "");
+        if (i == 9)
+        {
+            snprintf(buf, sizeof(buf), "%s%s", lines[i],
+                     musicReady ? "OK (BGM+SFX)" : "SFX ONLY");
+        }
+        else
+        {
+            snprintf(buf, sizeof(buf), "%s", lines[i]);
+        }
 
         int len = (int)strlen(buf);
         int show = budget < len ? budget : len;
         buf[show] = '\0';
 
-        Txt(2, 2 + i, buf, i == 9 ? K_ACC : K_MAIN);
+        Txt(2, 2 + i, buf, (i == numLines - 1) ? K_ACC : K_MAIN);
         budget -= len + 4;
     }
 
     if (g->screenT > 3.2f && fmodf(g->screenT, 1.0f) < 0.5f)
-        Txt(28, 12, "_", K_ACC);
+        Txt(28, 2 + numLines - 1, "_", K_ACC);
 
     RobotArt(33, 16, g->animation, 0);
 }
@@ -1030,7 +1224,12 @@ static void DrawDifficulty(Game *g)
 
     BombArt(28, 19, "????", fmodf(g->animation * 1.5f, 1.0f) < 0.5f, K_MAIN);
 
-    Txt(8, 18, "[ESC] BACK TO MENU", K_DIM);
+    if (TxtBtn(8, 18, "[ESC] BACK TO MENU", K_DIM, K_MAIN))
+    {
+        PlaySfx(SFX_BACK);
+        GoTo(g, MENU);
+        return;
+    }
 
     Footer("UP/DOWN+ENTER=SELECT  1-4=QUICK PICK  ESC=BACK");
 }
@@ -1162,7 +1361,10 @@ static void DrawGameScreen(Game *g)
     }
 
     if (TxtBtn(52, 24, "[ PAUSE (P) ]", K_MAIN, K_MAIN))
+    {
+        PlaySfx(SFX_PAUSE);
         GoTo(g, PAUSED);
+    }
 
     if (TxtBtn(67, 24, "[ CLEAR ]", K_MAIN, K_MAIN))
         ClearInput(g);
@@ -1177,10 +1379,18 @@ static void DrawGameScreen(Game *g)
             AddDigit(g, digit);
     }
 
-    if (TxtBtn(49, 25, "[DEL]", K_MAIN, K_MAIN) && g->inputLength > 0)
+    if (TxtBtn(49, 25, "[DEL]", K_MAIN, K_MAIN))
     {
-        g->inputLength--;
-        g->input[g->inputLength] = '\0';
+        if (g->inputLength > 0)
+        {
+            g->inputLength--;
+            g->input[g->inputLength] = '\0';
+            PlaySfx(SFX_DELETE);
+        }
+        else
+        {
+            PlaySfx(SFX_ERROR);
+        }
     }
 
     if (TxtBtn(55, 25, "[CLR]", K_MAIN, K_MAIN))
@@ -1231,7 +1441,7 @@ static void DrawPause(Game *g)
     const char *items[4] = {"RESUME", "RESTART MISSION", "HOW TO PLAY", "MAIN MENU"};
     int pick = MenuList(g, 28, 12, 24, 2, items, 4);
 
-    if (pick == 0) GoTo(g, PLAYING);
+    if (pick == 0) { PlaySfx(SFX_RESUME); GoTo(g, PLAYING); }
     else if (pick == 1)
     {
         g->secret = GetRandomValue(g->minimum, g->maximum);
@@ -1239,7 +1449,7 @@ static void DrawPause(Game *g)
         GoTo(g, PLAYING);
     }
     else if (pick == 2) { g->previousScreen = PAUSED; GoTo(g, CONTROLS); }
-    else if (pick == 3) GoTo(g, MENU);
+    else if (pick == 3) { PlaySfx(SFX_BACK); GoTo(g, MENU); }
 }
 
 /* -------------------------------------------------- */
@@ -1276,7 +1486,10 @@ static void DrawControls(Game *g)
     int pick = MenuList(g, 30, 27, 20, 1, items, 1);
 
     if (pick == 0 || IsKeyPressed(KEY_ESCAPE))
+    {
+        PlaySfx(SFX_BACK);
         GoTo(g, g->previousScreen);
+    }
 
     Footer("ENTER / ESC = BACK");
 }
@@ -1319,7 +1532,7 @@ static void DrawResults(Game *g)
     int pick = MenuList(g, 30, 24, 20, 2, items, 2);
 
     if (pick == 0) GoTo(g, DIFFICULTY);
-    else if (pick == 1) GoTo(g, MENU);
+    else if (pick == 1) { PlaySfx(SFX_BACK); GoTo(g, MENU); }
 
     {
         char buf[100];
@@ -1354,7 +1567,10 @@ static void UpdateGame(Game *g, float delta)
     {
         if (g->screenT > 0.4f &&
             (GetKeyPressed() != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)))
+        {
+            PlaySfx(SFX_SELECT);
             GoTo(g, MENU);
+        }
     }
     else if (g->screen == DIFFICULTY)
     {
@@ -1362,6 +1578,7 @@ static void UpdateGame(Game *g, float delta)
         {
             if (IsKeyPressed(KEY_ONE + i))
             {
+                PlaySfx(SFX_SELECT);
                 SetDifficulty(g, i);
                 GoTo(g, PLAYING);
                 return;
@@ -1369,11 +1586,30 @@ static void UpdateGame(Game *g, float delta)
         }
 
         if (IsKeyPressed(KEY_ESCAPE))
+        {
+            PlaySfx(SFX_BACK);
             GoTo(g, MENU);
+        }
     }
     else if (g->screen == PLAYING)
     {
+        int prevSec = (int)ceilf(g->timer);
         g->timer -= delta;
+        int curSec = (int)ceilf(g->timer);
+
+        if (curSec < prevSec && g->timer > 0.0f)
+        {
+            if (g->timer < 15.0f)
+            {
+                PlaySfx(SFX_TICK);
+                if (curSec % 3 == 0)
+                    PlaySfx(SFX_ALARM);
+            }
+            else if (curSec % 2 == 0)
+            {
+                PlaySfx(SFX_TICK);
+            }
+        }
 
         if (g->timer <= 0)
         {
@@ -1387,18 +1623,28 @@ static void UpdateGame(Game *g, float delta)
             g->warned = true;
             Say(g, "WARNING! Fifteen seconds left! Hurry!", 2, 5.0f);
             shake = 4.0f;
+            PlaySfx(SFX_ALARM);
         }
 
         if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_P))
         {
+            PlaySfx(SFX_PAUSE);
             GoTo(g, PAUSED);
             return;
         }
 
-        if (IsKeyPressed(KEY_BACKSPACE) && g->inputLength > 0)
+        if (IsKeyPressed(KEY_BACKSPACE))
         {
-            g->inputLength--;
-            g->input[g->inputLength] = '\0';
+            if (g->inputLength > 0)
+            {
+                g->inputLength--;
+                g->input[g->inputLength] = '\0';
+                PlaySfx(SFX_DELETE);
+            }
+            else
+            {
+                PlaySfx(SFX_ERROR);
+            }
         }
 
         if (IsKeyPressed(KEY_ENTER))
@@ -1417,7 +1663,10 @@ static void UpdateGame(Game *g, float delta)
     else if (g->screen == PAUSED)
     {
         if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_P))
+        {
+            PlaySfx(SFX_RESUME);
             GoTo(g, PLAYING);
+        }
     }
     else if (g->screen == RESULTS)
     {
@@ -1458,21 +1707,8 @@ int main(void)
     }
 
     /* AUDIO */
-    InitAudioDevice();
-
-    if (IsAudioDeviceReady() &&
-        FileExists("assets/background.mp3"))
-    {
-        music = LoadMusicStream("assets/background.mp3");
-
-        if (music.stream.buffer != NULL)
-        {
-            music.looping = true;
-            SetMusicVolume(music, 0.30f);
-            PlayMusicStream(music);
-            musicReady = true;
-        }
-    }
+    InitGameAudio();
+    PlaySfx(SFX_BOOT);
 
     SetRandomSeed((unsigned int)time(NULL));
 
@@ -1494,11 +1730,17 @@ int main(void)
 
         /* Theme toggle */
         if (IsKeyPressed(KEY_T))
+        {
             themeIndex = (themeIndex + 1) % 4;
+            PlaySfx(SFX_THEME);
+        }
 
         /* Music toggle */
         if (IsKeyPressed(KEY_M))
+        {
             ToggleMusic();
+            PlaySfx(SFX_NAV);
+        }
 
         if (musicReady)
             UpdateMusicStream(music);
@@ -1571,15 +1813,7 @@ int main(void)
         EndDrawing();
     }
 
-    if (musicReady)
-    {
-        StopMusicStream(music);
-        UnloadMusicStream(music);
-    }
-
-    if (IsAudioDeviceReady())
-        CloseAudioDevice();
-
+    UnloadGameAudio();
     CloseWindow();
 
     return 0;
