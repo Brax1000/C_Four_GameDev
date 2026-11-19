@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include "embedded_audio.h"
 
 /*
  * C-FOUR: LAST CHANCE  --  retro text-mode edition
@@ -176,18 +177,25 @@ static void InitGameAudio(void)
 
     if (IsAudioDeviceReady())
     {
+        /* 1. Background Music: load from disk if assets/ exists, otherwise from embedded memory */
         if (FileExists("assets/background.mp3"))
         {
             music = LoadMusicStream("assets/background.mp3");
-            if (music.stream.buffer != NULL)
-            {
-                music.looping = true;
-                SetMusicVolume(music, 0.22f);
-                PlayMusicStream(music);
-                musicReady = true;
-            }
+        }
+        else
+        {
+            music = LoadMusicStreamFromMemory(".mp3", EMBED_BGM_DATA, (int)sizeof(EMBED_BGM_DATA));
         }
 
+        if (music.stream.buffer != NULL)
+        {
+            music.looping = true;
+            SetMusicVolume(music, 0.22f);
+            PlayMusicStream(music);
+            musicReady = true;
+        }
+
+        /* 2. Sound Effects: load from disk if assets/ exists, otherwise from embedded memory */
         const char *sfxFiles[SFX_COUNT] = {
             "assets/sfx_boot.wav",
             "assets/sfx_keystroke.wav",
@@ -248,6 +256,20 @@ static void InitGameAudio(void)
             {
                 sfxList[i] = LoadSound(sfxFiles[i]);
                 sfxLoaded[i] = true;
+            }
+            else if (i < (int)(sizeof(EMBEDDED_SFX_BUFFERS) / sizeof(EMBEDDED_SFX_BUFFERS[0])))
+            {
+                Wave w = LoadWaveFromMemory(".wav", EMBEDDED_SFX_BUFFERS[i].data, (int)EMBEDDED_SFX_BUFFERS[i].size);
+                if (w.data != NULL)
+                {
+                    sfxList[i] = LoadSoundFromWave(w);
+                    sfxLoaded[i] = true;
+                    UnloadWave(w);
+                }
+            }
+
+            if (sfxLoaded[i])
+            {
                 SetSoundVolume(sfxList[i], sfxVolumes[i]);
             }
         }
